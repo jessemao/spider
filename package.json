@@ -1,0 +1,23 @@
+{
+  "name": "spider",
+  "version": "0.1.0",
+  "description": "spider node",
+  "main": "lib/index.js",
+  "author": "Jingxian Mao",
+  "license": "MIT",
+  "scripts": {
+    "dev": "babel-node src/index.js",
+    "build": "babel src/ -d lib/"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.2",
+    "superagent": "^3.5.2"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-polyfill": "^6.26.0",
+    "babel-preset-env": "^1.6.0",
+    "babel-preset-flow": "^6.23.0",
+    "flow-bin": "^0.53.1"
+  }
+}
