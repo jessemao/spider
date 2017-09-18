@@ -34,6 +34,7 @@ class Spider {
   }
 
   async fetchHome(suffix: string) {
+    console.log('fetching page ', suffix);
     const formattedUrl = this.formatUrl(suffix);
     const res = await request.get(formattedUrl);
     const result = await this.lookUpAddressInfo(res);
