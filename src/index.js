@@ -33,7 +33,7 @@ class Spider {
     return `${URL_PREFIX.douban}${url}`;
   }
 
-  async fetchHome(suffix: string, filename: string) {
+  async fetchHome(suffix: string) {
     const formattedUrl = this.formatUrl(suffix);
     const res = await request.get(formattedUrl);
     const result = await this.lookUpAddressInfo(res);
@@ -41,13 +41,7 @@ class Spider {
     result.map((res) => {
       addrArray = addrArray.concat(res);
     })
-    console.log('addrs', addrArray);
-    const csv = json2csv({data: addrArray, fields: ['lang', 'value']});
-    console.log(csv);
-    fs.writeFile(`${filename}.csv`, csv, function(err) {
-      if (err) throw err;
-      console.log('file saved');
-    });
+    return addrArray;
   }
 
   async lookUpAddressInfo(res: any) {
@@ -126,12 +120,25 @@ class Spider {
     return bookInfoObj;
   }
 
+  async downloadCityAddress(city: string) {
+    let result = [];
+    for (var index = 0; index < 10; index++) {
+      var element = await this.fetchHome(`/street/${city}_${index+1}.htm`);
+      result = result.concat(element);
+    }
+    const csv = json2csv({data: result, fields: ['lang', 'value']});
+    fs.writeFile(`${city}.csv`, csv, function(err) {
+      if (err) throw err;
+      console.log('file saved');
+    });
+  }
+
 }
 
 export default Spider;
 
 const spider = new Spider();
 (async () => {
-  await spider.fetchHome('/street/china_1.htm', 'street_1');
+  await spider.downloadCityAddress('Zhejiang');
 })();
 // spider.fetchTagPages('随笔');
