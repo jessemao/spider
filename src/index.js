@@ -2,14 +2,16 @@
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import json2csv from 'json2csv';
 import cheerio from 'cheerio';
 import request from 'superagent';
 import { formatInfoObject } from './util/formatter';
 
 const i: number = 0;
-const url: string = "https://book.douban.com/tag/%E6%8E%A8%E7%90%86";
+
+// const url: string = "https://book.douban.com/tag/%E6%8E%A8%E7%90%86";
 const URL_PREFIX = {
-  douban: "https://book.douban.com",
+  douban: "http://www.9181.cn",
   search: "subject_search",
   tag: "tag",
   subject: 'subject',
@@ -28,70 +30,83 @@ class Spider {
       return formattedUrl;
     }
 
-    return `${URL_PREFIX.douban}/${url}`;
+    return `${URL_PREFIX.douban}${url}`;
   }
 
-  async fetchTagPages(tag: string) {
-    const res = await request.get(this.formatUrl([URL_PREFIX.tag, encodeURI(tag)]));
-    this.lookUpBookInfo(res);
-  }
-
-  async fetchSearchPage(searchText: string) {
-    const res = await request.get(this.formatUrl(URL_PREFIX.search))
-      .query({'search_text': searchText});
-    console.log('promise: ', Promise);
-    const books = await Promise.all(this.lookUpBookInfo.call(this, res));
-    return books;
-  }
-
-  lookUpBookInfo(res: any) {
-    console.log('look up')
-    var $ = cheerio.load(res.text);
-    const books = [];
-    $(".subject-item>.info>h2>a").each((index, item) => {
-      const bookUrl = $(item).attr('href');
-      console.log('this:', this);
-      const book = this.fetchBookInfo(bookUrl);
-      console.log('after this');
-      books.push(book);
+  async fetchHome(suffix: string, filename: string) {
+    const formattedUrl = this.formatUrl(suffix);
+    const res = await request.get(formattedUrl);
+    const result = await this.lookUpAddressInfo(res);
+    let addrArray = [];
+    result.map((res) => {
+      addrArray = addrArray.concat(res);
+    })
+    console.log('addrs', addrArray);
+    const csv = json2csv({data: addrArray, fields: ['lang', 'value']});
+    console.log(csv);
+    fs.writeFile(`${filename}.csv`, csv, function(err) {
+      if (err) throw err;
+      console.log('file saved');
     });
-    return books;
   }
 
-  async fetchBookInfo(url: string) {
+  async lookUpAddressInfo(res: any) {
+    var $ = cheerio.load(res.text);
+    let totalAddr = [];
+    $("#showsp>table a").each((index, item) => {
+      const linkUrl = $(item).attr('href');
+      if(index % 2 === 0) {
+        const address = this.fetchLinkUrl(this.formatUrl(linkUrl));
+        totalAddr = totalAddr.concat(address);
+      }
+    });
+    return await Promise.all(totalAddr);
+
+  }
+
+  async fetchLinkUrl(url: string): Array<any> {
     const res = await request.get(url);
-    let bookInfoObj = {};
+    let addressInfoObj = {};
     var $ = cheerio.load(res.text);
-    // parse book title
-    const title = $('#wrapper>h1').text().replace(/\s/g, '');
-    const content = $('#wrapper .subjectwrap');
-    // parse book image
-    const imageUrl = $(content).find('#mainpic .nbg').attr('href');
-    // this.downloadImage(imageUrl, title);
 
-    const bookInfo = $(content).find('#info');
-    bookInfoObj = this.parseBookInfo($, bookInfo, bookInfoObj);
-    // parse book tags
-    const tags = $('#wrapper #db-tags-section .tag');
-    let bookTags = [];
-    tags.each((index, item) => {
-      bookTags.push($(item).text().replace(/\s/g, ''));
+    const rowsRawText = $('#rowshow').text();
+    const rowsSplit = rowsRawText.split(';');
+    const trans = rowsSplit.map((row) => {
+      const valueSplit = row.split(':');
+      return {
+        lang: valueSplit[0],
+        value: valueSplit[1] || '',
+      }
     });
-    Object.assign(bookInfoObj, { title: title, tag: bookTags, imageUrl: imageUrl });
-    return bookInfoObj;
+
+    return trans;
+    // parse address title
+    // const title = $('#wrapper>h1').text().replace(/\s/g, '');
+    // const content = $('#wrapper .subjectwrap');
+
+    // const addressInfo = $(content).find('#info');
+    // addressInfoObj = this.parseAddressInfo($, addressInfo, addressInfoObj);
+    // // parse address tags
+    // const tags = $('#wrapper #db-tags-section .tag');
+    // let addressTags = [];
+    // tags.each((index, item) => {
+    //   addressTags.push($(item).text().replace(/\s/g, ''));
+    // });
+    // Object.assign(addressInfoObj, { title: title, tag: addressTags, imageUrl: imageUrl });
+    return addressInfoObj;
   }
 
-  async downloadImage(imageUrl: string, title: string) {
-    const file = await request(imageUrl);
-    const urlSplits = imageUrl.split('.');
-    const imageType = urlSplits[urlSplits.length - 1];
-    const imageNewUrl = path.join(PATH_NAME, `${title}.${imageType}`);
-    // console.log(path.relative(BASE_NAME, imageNewUrl));
-    let writeStream = fs.createWriteStream(imageNewUrl);
-    writeStream.write(file.body);
-  }
+  // async downloadImage(imageUrl: string, title: string) {
+  //   const file = await request(imageUrl);
+  //   const urlSplits = imageUrl.split('.');
+  //   const imageType = urlSplits[urlSplits.length - 1];
+  //   const imageNewUrl = path.join(PATH_NAME, `${title}.${imageType}`);
+  //   // console.log(path.relative(BASE_NAME, imageNewUrl));
+  //   let writeStream = fs.createWriteStream(imageNewUrl);
+  //   writeStream.write(file.body);
+  // }
 
-  parseBookInfo($:any, bookInfo: any, bookInfoObj: {[string]: string | Array<string>}) : {[string]: string | Array<string> } {
+  parseAddressInfo($:any, bookInfo: any, bookInfoObj: {[string]: string | Array<string>}) : {[string]: string | Array<string> } {
     bookInfo.find('.pl').each((index, item) => {
       const label = $(item).text().replace(/\s/g, '');
       let value = $($(item)[0].next).text().replace(/\s/g, '');
@@ -115,6 +130,8 @@ class Spider {
 
 export default Spider;
 
-// const spider = new Spider();
-// // spider.fetchSearchPage('冰与火之歌');
+const spider = new Spider();
+(async () => {
+  await spider.fetchHome('/street/china_1.htm', 'street_1');
+})();
 // spider.fetchTagPages('随笔');
